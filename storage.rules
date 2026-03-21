@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow authenticated users to read and write to their own folder
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Fallback for general authenticated access if needed
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      // Limit to 25MB in rules to match frontend limit
+      allow write: if request.auth != null && request.resource.size < 25 * 1024 * 1024;
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "TimeTracker - Trần Văn Thắng",
+  "description": "Công cụ chấm công và quản lý thời gian làm việc cá nhân dành riêng cho Trần Văn Thắng.",
+  "requestFramePermissions": ["camera"]
+}

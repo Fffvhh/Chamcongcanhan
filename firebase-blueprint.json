@@ -1,0 +1,202 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Basic user profile and role",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "staffId": { "type": "string", "description": "Employee ID (Mã nhân viên)" },
+        "socialLinks": {
+          "type": "object",
+          "properties": {
+            "facebook": { "type": "string" },
+            "zalo": { "type": "string" },
+            "github": { "type": "string" }
+          }
+        },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "AttendanceRecord": {
+      "title": "Attendance Record",
+      "description": "Daily attendance data for a user",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "description": "YYYY-MM-DD" },
+        "checkIn": { "type": "string", "description": "ISO string" },
+        "checkOut": { "type": "string", "description": "ISO string" },
+        "overtimeCheckIn": { "type": "string", "description": "ISO string" },
+        "overtimeCheckOut": { "type": "string", "description": "ISO string" },
+        "extraOvertimeCheckIn": { "type": "string", "description": "ISO string" },
+        "extraOvertimeCheckOut": { "type": "string", "description": "ISO string" },
+        "overtimeIncome": { "type": "number" },
+        "status": { "type": "string", "enum": ["present", "absent", "half-day", "leave", "holiday"] },
+        "notes": { "type": "string" },
+        "uid": { "type": "string", "description": "User ID" }
+      },
+      "required": ["date", "status", "uid"]
+    },
+    "SalarySettings": {
+      "title": "Salary Settings",
+      "description": "User's salary and shift configuration",
+      "type": "object",
+      "properties": {
+        "userName": { "type": "string" },
+        "monthlyWage": { "type": "number" },
+        "workingDaysPerMonth": { "type": "number" },
+        "baseWage": { "type": "number" },
+        "shiftSettings": {
+          "type": "object",
+          "properties": {
+            "morningStart": { "type": "string" },
+            "morningEnd": { "type": "string" },
+            "afternoonStart": { "type": "string" },
+            "afternoonEnd": { "type": "string" }
+          }
+        },
+        "uid": { "type": "string" }
+      },
+      "required": ["userName", "uid"]
+    },
+    "Memory": {
+      "title": "Memory",
+      "description": "A memory entry with an image and note",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "note": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["id", "date", "imageUrl", "uid"]
+    },
+    "DeviceHistory": {
+      "title": "Device History",
+      "description": "Login history of the user",
+      "type": "object",
+      "properties": {
+        "userAgent": { "type": "string" },
+        "platform": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "type": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["userAgent", "platform", "timestamp", "type", "uid"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Log of user actions and record changes",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["action", "details", "timestamp", "uid"]
+    },
+    "SpendingPlanCategory": {
+      "title": "Spending Plan Category",
+      "description": "A specific spending category for a month",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "uid": { "type": "string" }
+      },
+      "required": ["category", "amount", "uid"]
+    },
+    "SavingsGoal": {
+      "title": "Savings Goal",
+      "description": "User's savings goal",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "durationMonths": { "type": "number" },
+        "uid": { "type": "string" }
+      },
+      "required": ["title", "targetAmount", "currentAmount", "durationMonths", "uid"]
+    },
+    "LocketPhoto": {
+      "title": "Locket Photo",
+      "description": "A photo shared in the Locket feed",
+      "type": "object",
+      "properties": {
+        "imageUrl": { "type": "string" },
+        "caption": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" }
+      },
+      "required": ["imageUrl", "timestamp", "uid"]
+    },
+    "Journey": {
+      "title": "Journey",
+      "description": "A saved journey or trip",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "startLocation": { "type": "string" },
+        "endLocation": { "type": "string" },
+        "date": { "type": "string" },
+        "note": { "type": "string" },
+        "imageUrl": { "type": "string", "description": "Optional image for the journey" },
+        "uid": { "type": "string" }
+      },
+      "required": ["id", "title", "startLocation", "endLocation", "date", "uid"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and role"
+    },
+    "/users/{userId}/attendance/{date}": {
+      "schema": "AttendanceRecord",
+      "description": "User's daily attendance records"
+    },
+    "/users/{userId}/settings/salary": {
+      "schema": "SalarySettings",
+      "description": "User's salary settings"
+    },
+    "/users/{userId}/memories/{memoryId}": {
+      "schema": "Memory",
+      "description": "User's memories"
+    },
+    "/users/{userId}/devices/{deviceId}": {
+      "schema": "DeviceHistory",
+      "description": "User's login devices history"
+    },
+    "/users/{userId}/logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "User's action logs"
+    },
+    "/users/{userId}/spendingPlans/{month}/categories/{categoryId}": {
+      "schema": "SpendingPlanCategory",
+      "description": "User's monthly spending plan categories"
+    },
+    "/users/{userId}/savingsGoals/{goalId}": {
+      "schema": "SavingsGoal",
+      "description": "User's savings goals"
+    },
+    "/users/{userId}/journeys/{journeyId}": {
+      "schema": "Journey",
+      "description": "User's journeys and trips"
+    },
+    "/locketPhotos/{photoId}": {
+      "schema": "LocketPhoto",
+      "description": "Global feed of Locket photos"
+    }
+  }
+}

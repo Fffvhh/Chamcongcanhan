@@ -1,0 +1,330 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users/{userId}/attendance
+    // Document ID: date (YYYY-MM-DD)
+    // Fields:
+    //   - date: string (required, YYYY-MM-DD)
+    //   - checkIn: string (optional, ISO)
+    //   - checkOut: string (optional, ISO)
+    //   - overtimeCheckIn: string (optional, ISO)
+    //   - overtimeCheckOut: string (optional, ISO)
+    //   - extraOvertimeCheckIn: string (optional, ISO)
+    //   - extraOvertimeCheckOut: string (optional, ISO)
+    //   - overtimeIncome: number (optional)
+    //   - status: string (required, enum: ["present", "absent", "half-day", "leave", "holiday"])
+    //   - notes: string (optional)
+    //   - uid: string (required, matches owner)
+    //
+    // Collection: users/{userId}/settings
+    // Document ID: salary
+    // Fields:
+    //   - userName: string (required)
+    //   - monthlyWage: number (optional)
+    //   - workingDaysPerMonth: number (optional)
+    //   - baseWage: number (optional)
+    //   - shiftSettings: map (optional)
+    //   - uid: string (required, matches owner)
+    //
+    // Collection: users/{userId}/memories
+    // Document ID: memoryId
+    // Fields:
+    //   - id: string (required)
+    //   - date: string (required, YYYY-MM-DD)
+    //   - imageUrl: string (required, base64)
+    //   - note: string (optional)
+    //   - uid: string (required, matches owner)
+    //
+    // Collection: users/{userId}/cloudStorage
+    // Document ID: itemId
+    // Fields:
+    //   - id: string (required)
+    //   - type: string (required, enum: ["text", "image", "file", "link"])
+    //   - name: string (required)
+    //   - content: string (required)
+    //   - size: number (required)
+    //   - createdAt: string (required, ISO)
+    //   - uid: string (required, matches owner)
+    //
+    // Collection: locketPhotos
+    // Document ID: photoId
+    // Fields:
+    //   - imageUrl: string (required, base64)
+    //   - caption: string (optional)
+    //   - timestamp: string (required, ISO)
+    //   - uid: string (required, matches owner)
+    //   - userName: string (optional)
+    //   - userPhoto: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          ("email" in request.auth.token && request.auth.token.email == "tranvanthang.idv1@gmail.com") ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin')
+        );
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidDate(date) {
+      return date is string && date.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+
+    function isValidISO(iso) {
+      return iso == null || (iso is string && iso.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$"));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidAttendance(data) {
+      return hasRequiredFields(['date', 'status', 'uid']) &&
+        isValidDate(data.date) &&
+        data.status in ["present", "absent", "half-day", "leave", "holiday"] &&
+        data.uid == request.auth.uid &&
+        isValidISO(data.get('checkIn', null)) &&
+        isValidISO(data.get('checkOut', null)) &&
+        isValidISO(data.get('overtimeCheckIn', null)) &&
+        isValidISO(data.get('overtimeCheckOut', null)) &&
+        (data.get('notes', '') is string && data.get('notes', '').size() < 1000);
+    }
+
+    function isValidSettings(data) {
+      return hasRequiredFields(['userName', 'uid']) &&
+        data.userName is string && data.userName.size() > 0 && data.userName.size() < 100 &&
+        data.uid == request.auth.uid &&
+        (data.get('monthlyWage', 0) is number) &&
+        (data.get('workingDaysPerMonth', 0) is number);
+    }
+
+    function isValidMemory(data) {
+      return hasRequiredFields(['id', 'date', 'imageUrl', 'uid']) &&
+        data.id is string &&
+        isValidDate(data.date) &&
+        data.imageUrl is string && data.imageUrl.size() < 2000000 && // ~2MB limit for base64
+        data.uid == request.auth.uid &&
+        (data.get('note', '') is string && data.get('note', '').size() < 2000);
+    }
+
+    function isValidDevice(data) {
+      return hasRequiredFields(['userAgent', 'platform', 'timestamp', 'type', 'uid']) &&
+        data.userAgent is string && data.userAgent.size() < 5000 &&
+        data.platform is string && data.platform.size() < 500 &&
+        isValidISO(data.timestamp) &&
+        data.type == 'login' &&
+        data.uid == request.auth.uid;
+    }
+
+    function isValidCloudStorage(data) {
+      return hasRequiredFields(['id', 'type', 'name', 'content', 'size', 'createdAt', 'uid']) &&
+        data.id is string &&
+        data.type in ["text", "image", "file", "link"] &&
+        data.name is string && data.name.size() < 500 &&
+        data.content is string && data.content.size() < 1048576 && // 1MB limit for Firestore doc
+        data.size is number && data.size >= 0 &&
+        isValidISO(data.createdAt) &&
+        data.uid == request.auth.uid;
+    }
+
+    function isValidPassword(data) {
+      return hasRequiredFields(['id', 'title', 'category', 'username', 'password', 'createdAt', 'uid']) &&
+        data.id is string &&
+        data.title is string && data.title.size() < 100 &&
+        data.category in ["social", "banking", "other"] &&
+        data.username is string && data.username.size() < 200 &&
+        data.password is string && data.password.size() < 1000 &&
+        (!('note' in data) || (data.note is string && data.note.size() < 1000)) &&
+        isValidISO(data.createdAt) &&
+        data.uid == request.auth.uid;
+    }
+
+    function isValidMusic(data) {
+      return hasRequiredFields(['id', 'name', 'url', 'size', 'createdAt', 'uid']) &&
+        data.id is string &&
+        data.name is string && data.name.size() < 500 &&
+        data.url is string && isValidUrl(data.url) &&
+        data.size is number && data.size >= 0 &&
+        isValidISO(data.createdAt) &&
+        data.uid == request.auth.uid;
+    }
+
+    function isValidSpendingPlanCategory(data) {
+      return hasRequiredFields(['category', 'amount', 'uid']) &&
+        data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
+        data.amount is number && data.amount >= 0 &&
+        data.uid == request.auth.uid;
+    }
+
+    function isValidSavingsGoal(data) {
+      return hasRequiredFields(['title', 'targetAmount', 'currentAmount', 'durationMonths', 'uid']) &&
+        data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+        data.targetAmount is number && data.targetAmount > 0 &&
+        data.currentAmount is number && data.currentAmount >= 0 &&
+        data.durationMonths is number && data.durationMonths > 0 &&
+        data.uid == request.auth.uid;
+    }
+
+    function isValidLocketPhoto(data) {
+      return hasRequiredFields(['imageUrl', 'timestamp', 'uid']) &&
+        data.imageUrl is string && data.imageUrl.size() < 2000000 &&
+        isValidISO(data.timestamp) &&
+        data.uid == request.auth.uid &&
+        (!('caption' in data) || (data.caption is string && data.caption.size() < 500)) &&
+        (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
+        (!('userPhoto' in data) || (data.userPhoto is string && data.userPhoto.size() < 1000));
+    }
+
+    function isValidJourney(data) {
+      return hasRequiredFields(['id', 'title', 'startLocation', 'endLocation', 'date', 'uid']) &&
+        data.id is string &&
+        data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+        data.startLocation is string && data.startLocation.size() > 0 && data.startLocation.size() < 500 &&
+        data.endLocation is string && data.endLocation.size() > 0 && data.endLocation.size() < 500 &&
+        isValidDate(data.date) &&
+        data.uid == request.auth.uid &&
+        (!('note' in data) || (data.note is string && data.note.size() < 2000)) &&
+        (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000000));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /stats/{statId} {
+      allow read: if true;
+      allow write: if statId == 'visits';
+    }
+
+    match /users/{userId} {
+      allow list: if isAuthenticated();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId) || isAdmin();
+
+      match /attendance/{date} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidAttendance(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /settings/salary {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidSettings(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /memories/{memoryId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidMemory(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /cloudStorage/{itemId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidCloudStorage(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /devices/{deviceId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidDevice(request.resource.data);
+        allow update, delete: if false; // Immutable history
+      }
+
+      match /logs/{logId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId); // Basic creation allowed for logging
+        allow update, delete: if false; // Immutable logs
+      }
+
+      match /passwords/{passwordId} {
+        allow list: if isOwner(userId);
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidPassword(request.resource.data);
+        allow update: if isOwner(userId) && isValidPassword(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /music/{musicId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidMusic(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /spendingPlans/{month}/categories/{categoryId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidSpendingPlanCategory(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /savingsGoals/{goalId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidSavingsGoal(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /journeys/{journeyId} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidJourney(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    match /locketPhotos/{photoId} {
+      allow list: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidLocketPhoto(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(resource.data.uid) && isValidLocketPhoto(request.resource.data);
+      allow delete: if isAuthenticated() && (isOwner(resource.data.uid) || isAdmin());
+
+      match /likes/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      }
+    }
+  }
+}

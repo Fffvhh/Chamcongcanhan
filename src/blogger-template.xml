@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:version='2' class='v2' expr:dir='data:blog.languageDirection' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+<head>
+    <title><data:blog.pageTitle/></title>
+    <b:skin><![CDATA[
+        body { margin: 0; padding: 0; background: #f5f5f5; }
+    ]]></b:skin>
+</head>
+<body>
+    <!-- Ứng dụng React sẽ hiển thị tại đây -->
+    <div id="root"></div>
+    
+    <!-- Phần bắt buộc của Blogger -->
+    <b:section class='main' id='main' showaddelement='yes'/>
+
+    <!-- HƯỚNG DẪN: 
+         1. Build ứng dụng: `npm run build`
+         2. Upload các file trong thư mục `dist/assets/` lên host (Firebase Hosting, GitHub Pages, v.v.).
+         3. Thay thế URL_TO_YOUR_HOSTED_... bằng link file thật sau khi đã upload.
+    -->
+    <script type="module" src="URL_TO_YOUR_HOSTED_INDEX_JS"></script>
+    <link rel="stylesheet" href="URL_TO_YOUR_HOSTED_INDEX_CSS"/>
+</body>
+</html>

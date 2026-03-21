@@ -4,15 +4,13 @@
  */
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { CalendarView } from './components/CalendarView';
 import { Statistics } from './components/Statistics';
 import { Settings } from './components/Settings';
 import { AdminDashboard } from './components/AdminDashboard';
-import { SplashScreen } from './components/SplashScreen';
-import { LoginScreen } from './components/LoginScreen';
 import { ErrorBoundary } from './ErrorBoundary';
 import { AttendanceProvider } from './contexts/AttendanceContext';
 import { db } from './firebase';
@@ -26,7 +24,6 @@ import { cn } from './utils/cn';
 function AppContent() {
   const { userRole, user, salarySettings, isLoaded, theme, themeColor } = useAttendance();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     console.log("AppContent: isLoaded changed to", isLoaded);
@@ -79,19 +76,6 @@ function AppContent() {
   // Removed login screen check to allow direct access
   return (
     <>
-      <AnimatePresence>
-        {showSplash && (
-          <motion.div
-            key="splash"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="fixed inset-0 z-[9999]"
-          >
-            <SplashScreen onComplete={() => setShowSplash(false)} isLoaded={isLoaded} />
-          </motion.div>
-        )}
-      </AnimatePresence>
       {salarySettings.notificationEnabled && <UpdateNotification />}
 
       <div 

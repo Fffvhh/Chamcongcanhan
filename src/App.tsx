@@ -76,10 +76,7 @@ function AppContent() {
     }
   }, [userRole]);
 
-  if (!user && isLoaded) {
-    return <LoginScreen />;
-  }
-
+  // Removed login screen check to allow direct access
   return (
     <>
       <AnimatePresence>

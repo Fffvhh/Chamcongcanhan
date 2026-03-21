@@ -16,7 +16,6 @@ import { AttendanceProvider } from './contexts/AttendanceContext';
 import { db } from './firebase';
 import { doc, getDocFromServer, setDoc, increment, updateDoc } from 'firebase/firestore';
 import { useAttendance } from './hooks/useAttendance';
-import { UpdateNotification } from './components/UpdateNotification';
 import { Memories } from './components/Memories';
 import { Journey } from './components/Journey';
 import { cn } from './utils/cn';
@@ -76,8 +75,6 @@ function AppContent() {
   // Removed login screen check to allow direct access
   return (
     <>
-      {salarySettings.notificationEnabled && <UpdateNotification />}
-
       <div 
         className={cn(
           "flex flex-col md:flex-row min-h-screen bg-white dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300",

@@ -406,17 +406,6 @@ export function Settings() {
     }
   };
 
-  const handleUpdateApp = () => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
-        for (let registration of registrations) {
-          registration.update();
-        }
-      });
-    }
-    window.location.reload();
-  };
-
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32">
       {statusMessage && (
@@ -864,24 +853,6 @@ export function Settings() {
           <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
         </button>
 
-        <button 
-          onClick={handleUpdateApp}
-          className="w-full p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors text-left group"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <RefreshCw size={20} />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-200">Cập nhật phiên bản</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs">Kiểm tra và cài đặt bản mới nhất</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full uppercase tracking-widest">v2.1.0</span>
-            <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
-          </div>
-        </button>
 
         <div className="w-full p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
           <div className="flex items-center gap-4">

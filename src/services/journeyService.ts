@@ -1,5 +1,6 @@
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy } from 'firebase/firestore';
-import { db, auth, handleFirestoreError } from '../firebase';
+import { db, auth } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 
 export interface Journey {
   id: string;
@@ -24,7 +25,7 @@ export const getJourneys = async (): Promise<Journey[]> => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => doc.data() as Journey);
   } catch (error) {
-    handleFirestoreError(error, 'get' as any, `users/${auth.currentUser?.uid}/journeys`);
+    handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}/journeys`);
     return [];
   }
 };
@@ -40,7 +41,7 @@ export const addJourney = async (journey: Omit<Journey, 'id' | 'uid'>): Promise<
     };
     await setDoc(doc(db, `users/${auth.currentUser.uid}/journeys`, id), newJourney);
   } catch (error) {
-    handleFirestoreError(error, 'create' as any, `users/${auth.currentUser?.uid}/journeys`);
+    handleFirestoreError(error, OperationType.CREATE, `users/${auth.currentUser?.uid}/journeys`);
   }
 };
 
@@ -49,7 +50,7 @@ export const deleteJourney = async (id: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, `users/${auth.currentUser.uid}/journeys`, id));
   } catch (error) {
-    handleFirestoreError(error, 'delete' as any, `users/${auth.currentUser?.uid}/journeys/${id}`);
+    handleFirestoreError(error, OperationType.DELETE, `users/${auth.currentUser?.uid}/journeys/${id}`);
   }
 };
 
@@ -58,6 +59,6 @@ export const updateJourney = async (id: string, journey: Partial<Omit<Journey, '
   try {
     await setDoc(doc(db, `users/${auth.currentUser.uid}/journeys`, id), journey, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, 'update' as any, `users/${auth.currentUser?.uid}/journeys/${id}`);
+    handleFirestoreError(error, OperationType.UPDATE, `users/${auth.currentUser?.uid}/journeys/${id}`);
   }
 };

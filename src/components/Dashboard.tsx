@@ -7,7 +7,7 @@ import { useMemories, Memory } from '../hooks/useMemories';
 import { getJourneys, Journey } from '../services/journeyService';
 import { cn } from '../utils/cn';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import { db, signInWithGoogle } from '../firebase';
 import { domToPng } from 'modern-screenshot';
 import { LevelProgress } from './LevelProgress';
@@ -19,7 +19,6 @@ export function Dashboard() {
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
   const [expandedMemory, setExpandedMemory] = useState<Memory | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{width: number, height: number} | null>(null);
-  const [journeys, setJourneys] = useState<Journey[]>([]);
   const [isJourneysLoading, setIsJourneysLoading] = useState(true);
   const [journeyCarouselIndex, setJourneyCarouselIndex] = useState(0);
   const [isJourneyCarouselPaused, setIsJourneyCarouselPaused] = useState(false);
@@ -39,26 +38,19 @@ export function Dashboard() {
     salarySettings,
     totalHours,
     user,
-    theme
+    theme,
+    journeys,
+    refreshJourneys
   } = useAttendance();
   
   const todayRecord = getTodayRecord();
   const activeRecord = getActiveRecord();
 
   useEffect(() => {
-    if (!user) return;
-    const fetchJourneysData = async () => {
-      try {
-        const data = await getJourneys();
-        setJourneys(data);
-      } catch (error) {
-        console.error("Failed to fetch journeys for dashboard", error);
-      } finally {
-        setIsJourneysLoading(false);
-      }
-    };
-    fetchJourneysData();
-  }, [user]);
+    if (user) {
+      refreshJourneys().finally(() => setIsJourneysLoading(false));
+    }
+  }, [user, refreshJourneys]);
 
   const journeyStats = useMemo(() => {
     const now = new Date();

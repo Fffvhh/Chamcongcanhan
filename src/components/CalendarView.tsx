@@ -19,7 +19,8 @@ import { vi } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Moon, Wallet, Plus, Trash2, List, Activity } from 'lucide-react';
 import { useAttendance, AttendanceStatus } from '../hooks/useAttendance';
 import { cn } from '../utils/cn';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { collection, doc, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
 
 interface Category {
@@ -62,13 +63,19 @@ export function CalendarView() {
 
     const categoriesRef = collection(db, 'users', auth.currentUser.uid, 'spendingPlans', monthStr, 'categories');
     
-    const unsubscribe = onSnapshot(categoriesRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
-      if (isMounted) setCategories(data);
-    }, (err) => {
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(categoriesRef, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+        if (isMounted) setCategories(data);
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, `users/${auth.currentUser?.uid}/spendingPlans/${monthStr}/categories`);
+        if (isMounted) setError("Lỗi kết nối dữ liệu chi tiêu.");
+      });
+    } catch (err) {
       handleFirestoreError(err, OperationType.LIST, `users/${auth.currentUser?.uid}/spendingPlans/${monthStr}/categories`);
       if (isMounted) setError("Lỗi kết nối dữ liệu chi tiêu.");
-    });
+    }
 
     return () => {
       isMounted = false;

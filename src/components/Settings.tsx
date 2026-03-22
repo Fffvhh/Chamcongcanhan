@@ -11,10 +11,10 @@ import { vi } from 'date-fns/locale';
 
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { CloudStorage } from './CloudStorage';
 import { PasswordVault } from './PasswordVault';
 import { LevelShowcase } from './LevelShowcase';
-import { generateWebsitePackage } from '../utils/zipGenerator';
 
 export function Settings() {
   const { exportData, importData, clearData, salarySettings, updateSalarySettings, updateUserProfile, user, records, userRole, getWorkingHours, getMonthlySummary, totalHours, themeColor, setThemeColor, theme, darkMode, toggleDarkMode } = useAttendance();
@@ -46,7 +46,7 @@ export function Settings() {
           setTotalVisits(visitsDoc.data().count || 0);
         }
       } catch (error) {
-        console.error("Failed to fetch stats (visits)", error);
+        handleFirestoreError(error, OperationType.GET, 'stats/visits');
       }
 
       try {
@@ -63,7 +63,7 @@ export function Settings() {
           setOnlineUsers(1); 
         }
       } catch (error) {
-        console.error(`Failed to fetch stats (online users). User: ${user?.email}, Role: ${userRole}`, error);
+        handleFirestoreError(error, OperationType.LIST, 'users');
       }
     };
 
@@ -516,20 +516,6 @@ export function Settings() {
                   <Cloud size={12} className="text-indigo-500" />
                   <span className="text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider">Đã đồng bộ</span>
                 </div>
-                <button 
-                  onClick={generateWebsitePackage}
-                  className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100/50 dark:border-emerald-900/20 flex items-center gap-2 hover:bg-emerald-100 transition-colors"
-                >
-                  <Globe size={12} className="text-emerald-500" />
-                  <span className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">Tải Website</span>
-                </button>
-                <button 
-                  onClick={() => window.open('https://github.com/your-username/your-repo', '_blank')}
-                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-2 hover:bg-slate-200 transition-colors"
-                >
-                  <Code size={12} className="text-slate-500" />
-                  <span className="text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Xem Mã Nguồn</span>
-                </button>
               </div>
             </div>
           </div>

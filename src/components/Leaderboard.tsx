@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Trophy, Users, UserPlus, Search, Flame, Award, Star } from 'lucide-react';
 import { useAttendance } from '../hooks/useAttendance';
 import { db } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { cn } from '../lib/utils';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { getLevel } from '../constants/levels';
@@ -59,7 +60,7 @@ export function Leaderboard() {
       users.sort((a, b) => b.totalHours - a.totalHours);
       setFriends(users);
     } catch (error) {
-      console.error("Leaderboard Error:", error);
+      handleFirestoreError(error, OperationType.GET, 'users');
     } finally {
       setIsLoading(false);
     }

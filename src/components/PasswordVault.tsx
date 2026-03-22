@@ -17,7 +17,8 @@ import {
   ShieldCheck,
   Search
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { useAttendance } from '../hooks/useAttendance';
 import { format } from 'date-fns';
@@ -76,17 +77,24 @@ export function PasswordVault() {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedItems: PasswordItem[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data() as PasswordItem;
-        fetchedItems.push({
-          ...data,
-          password: deobfuscate(data.password)
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedItems: PasswordItem[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data() as PasswordItem;
+          fetchedItems.push({
+            ...data,
+            password: deobfuscate(data.password)
+          });
         });
+        setItems(fetchedItems);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/passwords`);
       });
-      setItems(fetchedItems);
-    });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/passwords`);
+    }
 
     return () => unsubscribe();
   }, [user]);

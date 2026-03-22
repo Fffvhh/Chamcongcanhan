@@ -7,9 +7,8 @@ import { cn } from '../utils/cn';
 import { getJourneys, addJourney, deleteJourney, updateJourney, Journey as JourneyType } from '../services/journeyService';
 
 export const Journey = () => {
-  const { theme, themeColor } = useAttendance();
+  const { theme, themeColor, journeys, refreshJourneys } = useAttendance();
   const { showToast } = useToast();
-  const [journeys, setJourneys] = useState<JourneyType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,8 +37,8 @@ export const Journey = () => {
   const [isSearchingEnd, setIsSearchingEnd] = useState(false);
 
   useEffect(() => {
-    fetchJourneys();
-  }, []);
+    refreshJourneys().finally(() => setIsLoading(false));
+  }, [refreshJourneys]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -110,18 +109,6 @@ export const Journey = () => {
     } finally {
       if (type === 'start') setIsSearchingStart(false);
       else setIsSearchingEnd(false);
-    }
-  };
-
-  const fetchJourneys = async () => {
-    setIsLoading(true);
-    try {
-      const data = await getJourneys();
-      setJourneys(data);
-    } catch (error) {
-      console.error("Error fetching journeys:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -213,7 +200,7 @@ export const Journey = () => {
       setImageUrl('');
       setIsExpanded(false);
       
-      await fetchJourneys();
+      await refreshJourneys(true);
     } catch (error) {
       console.error("Error saving journey:", error);
       showToast("Có lỗi xảy ra khi lưu hành trình.", "error");
@@ -287,7 +274,7 @@ export const Journey = () => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa hành trình này?")) return;
     try {
       await deleteJourney(id);
-      setJourneys(journeys.filter(j => j.id !== id));
+      await refreshJourneys(true);
       showToast("Đã xóa hành trình!", "success");
     } catch (error) {
       console.error("Error deleting journey:", error);

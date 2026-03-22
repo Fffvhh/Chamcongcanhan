@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, where } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { useAttendance } from '../contexts/AttendanceContext';
 import { Users, Activity, Shield, ChevronRight, Search, Calendar, DollarSign, Clock, MonitorSmartphone, Mail, Phone, Globe, ExternalLink, Award, Edit2, Check, X, Bell, Lock, Unlock, UserCog, MoreVertical, ChevronLeft } from 'lucide-react';
 import { format, differenceInMinutes, parseISO, subMonths, addMonths } from 'date-fns';
@@ -101,19 +102,25 @@ export function AdminDashboard() {
     if (!user) return;
     const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
     
-    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
-      const usersList: UserProfile[] = [];
-      snapshot.forEach((doc) => {
-        usersList.push({ id: doc.id, ...doc.data() } as UserProfile);
-      });
-      setUsers(usersList);
-      if (usersList.length === 0) {
+    let unsubscribeUsers = () => {};
+    try {
+      unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+        const usersList: UserProfile[] = [];
+        snapshot.forEach((doc) => {
+          usersList.push({ id: doc.id, ...doc.data() } as UserProfile);
+        });
+        setUsers(usersList);
+        if (usersList.length === 0) {
+          setLoading(false);
+        }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'users');
         setLoading(false);
-      }
-    }, (error) => {
+      });
+    } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'users');
       setLoading(false);
-    });
+    }
 
     return () => unsubscribeUsers();
   }, [user]);
@@ -229,7 +236,7 @@ export function AdminDashboard() {
               presentDays: userPresents
             };
           } catch (err) {
-            console.error(`Error fetching stats for user ${user.id}:`, err);
+            handleFirestoreError(err, OperationType.GET, `users/${user.id}/attendance`);
           }
         }));
 
@@ -243,7 +250,7 @@ export function AdminDashboard() {
         setTotalPresentDays(totalPresents);
         setLoading(false);
       } catch (error) {
-        console.error("Error in fetchAllStats:", error);
+        handleFirestoreError(error, OperationType.GET, 'users/*/attendance');
         setLoading(false);
       } finally {
         fetchingStatsRef.current = false;
@@ -267,32 +274,45 @@ export function AdminDashboard() {
 
     // Real-time devices
     const deviceQ = query(collection(db, `users/${selectedUser.id}/devices`), orderBy('timestamp', 'desc'), limit(20));
-    const unsubscribeDevices = onSnapshot(deviceQ, (snapshot) => {
-      setSelectedUserDevices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error fetching devices:", error);
+    let unsubscribeDevices = () => {};
+    try {
+      unsubscribeDevices = onSnapshot(deviceQ, (snapshot) => {
+        setSelectedUserDevices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `users/${selectedUser.id}/devices`);
+      });
+    } catch (error) {
       handleFirestoreError(error, OperationType.LIST, `users/${selectedUser.id}/devices`);
-    });
+    }
 
     // Real-time records
     const recordQ = query(collection(db, `users/${selectedUser.id}/attendance`), orderBy('date', 'desc'), limit(30));
-    const unsubscribeRecords = onSnapshot(recordQ, (snapshot) => {
-      setSelectedUserRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error fetching records:", error);
+    let unsubscribeRecords = () => {};
+    try {
+      unsubscribeRecords = onSnapshot(recordQ, (snapshot) => {
+        setSelectedUserRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `users/${selectedUser.id}/attendance`);
+      });
+    } catch (error) {
       handleFirestoreError(error, OperationType.LIST, `users/${selectedUser.id}/attendance`);
-    });
+    }
 
     // Real-time logs
     const logQ = query(collection(db, `users/${selectedUser.id}/logs`), orderBy('timestamp', 'desc'), limit(30));
-    const unsubscribeLogs = onSnapshot(logQ, (snapshot) => {
-      setSelectedUserLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoadingDetails(false);
-    }, (error) => {
-      console.error("Error fetching logs:", error);
+    let unsubscribeLogs = () => {};
+    try {
+      unsubscribeLogs = onSnapshot(logQ, (snapshot) => {
+        setSelectedUserLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setLoadingDetails(false);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `users/${selectedUser.id}/logs`);
+        setLoadingDetails(false);
+      });
+    } catch (error) {
       handleFirestoreError(error, OperationType.LIST, `users/${selectedUser.id}/logs`);
       setLoadingDetails(false);
-    });
+    }
 
     return () => {
       unsubscribeDevices();

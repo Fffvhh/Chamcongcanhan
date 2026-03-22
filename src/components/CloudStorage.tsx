@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Eye
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { useAttendance } from '../hooks/useAttendance';
 import { format } from 'date-fns';
@@ -57,13 +58,20 @@ export function CloudStorage() {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedItems: StorageItem[] = [];
-      snapshot.forEach((doc) => {
-        fetchedItems.push(doc.data() as StorageItem);
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedItems: StorageItem[] = [];
+        snapshot.forEach((doc) => {
+          fetchedItems.push(doc.data() as StorageItem);
+        });
+        setItems(fetchedItems);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/cloudStorage`);
       });
-      setItems(fetchedItems);
-    });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/cloudStorage`);
+    }
 
     return () => unsubscribe();
   }, [user]);

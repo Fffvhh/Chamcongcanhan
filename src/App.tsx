@@ -13,6 +13,7 @@ import { Settings } from './components/Settings';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ErrorBoundary } from './ErrorBoundary';
 import { AttendanceProvider } from './contexts/AttendanceContext';
+import { handleFirestoreError, OperationType } from './utils/firestoreError';
 import { db } from './firebase';
 import { doc, getDocFromServer, setDoc, increment, updateDoc } from 'firebase/firestore';
 import { useAttendance } from './hooks/useAttendance';
@@ -44,7 +45,7 @@ function AppContent() {
         }
         sessionStorage.setItem('has_visited', 'true');
       } catch (e) {
-        console.error("Failed to increment visits", e);
+        handleFirestoreError(e, OperationType.UPDATE, 'stats/visits');
       }
     }
 

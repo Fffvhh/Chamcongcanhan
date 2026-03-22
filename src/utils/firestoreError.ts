@@ -37,6 +37,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     return;
   }
 
+  // Handle quota exceeded gracefully - don't crash the app
+  if (message.includes('Quota limit exceeded') || message.includes('resource-exhausted')) {
+    console.error(`Firestore quota exceeded during ${operationType} on ${path}. Please try again tomorrow or upgrade your Firebase plan.`);
+    return;
+  }
+
+  // Handle internal assertion failures (often caused by quota limits or offline state)
+  if (message.includes('INTERNAL ASSERTION FAILED')) {
+    console.error(`Firestore internal error during ${operationType} on ${path}. This may be related to quota limits or network issues.`, error);
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
     error: message,
     authInfo: {

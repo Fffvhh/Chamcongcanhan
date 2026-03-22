@@ -18,6 +18,7 @@ import {
   DocumentData
 } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../utils/firestoreError';
+import { Journey, getJourneys } from '../services/journeyService';
 
 export type AttendanceStatus = 'present' | 'absent' | 'half-day' | 'leave' | 'holiday';
 export type ThemeColor = 'slate' | 'emerald' | 'blue' | 'orange' | 'rose' | 'violet' | 'indigo' | 'amber' | 'teal' | 'cyan';
@@ -135,6 +136,8 @@ interface AttendanceContextType {
   themeColor: ThemeColor;
   setThemeColor: (color: ThemeColor) => void;
   theme: ThemeClasses;
+  journeys: Journey[];
+  refreshJourneys: (force?: boolean) => Promise<void>;
 }
 
 const AttendanceContext = createContext<AttendanceContextType | undefined>(undefined);
@@ -302,6 +305,28 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   const [userRole, setUserRole] = useState<'user' | 'admin'>('user');
   const [records, setRecords] = useState<Record<string, AttendanceRecord>>({});
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [historyLoadFailed, setHistoryLoadFailed] = useState(false);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
+  const [journeysLoadFailed, setJourneysLoadFailed] = useState(false);
+  const [isJourneysLoaded, setIsJourneysLoaded] = useState(false);
+
+  const fetchJourneys = useCallback(async (force = false) => {
+    if (!user || (!force && (isJourneysLoaded || journeysLoadFailed))) return;
+    try {
+      const data = await getJourneys();
+      setJourneys(data);
+      setJourneysLoadFailed(false);
+      setIsJourneysLoaded(true);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/journeys`);
+      setJourneysLoadFailed(true);
+      setIsJourneysLoaded(true);
+    }
+  }, [user, isJourneysLoaded, journeysLoadFailed]);
+
+  useEffect(() => {
+    if (user && !isJourneysLoaded && !journeysLoadFailed) fetchJourneys();
+  }, [user, fetchJourneys, isJourneysLoaded, journeysLoadFailed]);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -347,7 +372,7 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       try {
         await setDoc(doc(db, `users/${user.uid}`), { themeColor: color }, { merge: true });
       } catch (e) {
-        console.error("Failed to save theme color to Firestore", e);
+        handleFirestoreError(e, OperationType.UPDATE, `users/${user.uid}`);
       }
     }
   }, [user]);
@@ -451,7 +476,7 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
             sessionStorage.setItem(sessionKey, 'true');
           }
         } catch (e) {
-          console.error("Error in auth listener", e);
+          handleFirestoreError(e, OperationType.CREATE, `users/${currentUser.uid}/devices`);
           setIsLoaded(true);
         }
       }
@@ -469,7 +494,7 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
           lastActive: new Date().toISOString()
         }, { merge: true });
       } catch (e) {
-        console.error("Failed to update last active status", e);
+        handleFirestoreError(e, OperationType.UPDATE, `users/${user.uid}`);
       }
     };
     updateLastActive();
@@ -487,20 +512,17 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       where('date', '>=', dateStr),
       orderBy('date', 'desc')
     );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setRecords(prev => {
-        const updatedRecords = { ...prev };
-        snapshot.forEach((doc) => {
-          updatedRecords[doc.id] = doc.data() as AttendanceRecord;
-        });
-        return updatedRecords;
+    getDocs(q).then((snapshot) => {
+      const updatedRecords: Record<string, AttendanceRecord> = {};
+      snapshot.forEach((doc) => {
+        updatedRecords[doc.id] = doc.data() as AttendanceRecord;
       });
+      setRecords(updatedRecords);
       setIsLoaded(true);
-    }, (error) => {
+    }).catch((error) => {
       handleFirestoreError(error, OperationType.GET, `users/${user.uid}/attendance`);
       setIsLoaded(true);
     });
-    return () => unsubscribe();
   }, [user]);
 
   // Calculate total hours
@@ -525,7 +547,7 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
 
   // Pagination for History
   const loadMoreHistory = useCallback(async () => {
-    if (!user || !hasMore || isLoadingHistory) return;
+    if (!user || !hasMore || isLoadingHistory || historyLoadFailed) return;
     setIsLoadingHistory(true);
     try {
       const attendanceRef = collection(db, `users/${user.uid}/attendance`);
@@ -542,56 +564,64 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
         if (snapshot.docs.length < 20) setHasMore(false);
       }
     } catch (error) {
-      console.error("Error loading history", error);
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/attendance`);
+      setHistoryLoadFailed(true);
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [user, lastVisible, hasMore, isLoadingHistory]);
+  }, [user, lastVisible, hasMore, isLoadingHistory, historyLoadFailed]);
 
   useEffect(() => {
-    if (user && history.length === 0) loadMoreHistory();
-  }, [user, loadMoreHistory, history.length]);
+    if (user && history.length === 0 && !historyLoadFailed) loadMoreHistory();
+  }, [user, loadMoreHistory, history.length, historyLoadFailed]);
 
   // Firestore Sync - Settings
   useEffect(() => {
     if (!user) return;
     const settingsDoc = doc(db, `users/${user.uid}/settings/salary`);
     const userDocRef = doc(db, `users/${user.uid}`);
-    const unsubscribe = onSnapshot(settingsDoc, async (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data() as SalarySettings;
-        if (!data.friendCode) {
-          const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-          const updatedSettings = { ...data, friendCode: newCode };
-          setSalarySettings(updatedSettings);
-          await setDoc(settingsDoc, { ...updatedSettings, uid: user.uid }, { merge: true });
-          await setDoc(userDocRef, { friendCode: newCode }, { merge: true });
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(settingsDoc, async (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data() as SalarySettings;
+          if (!data.friendCode) {
+            const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const updatedSettings = { ...data, friendCode: newCode };
+            setSalarySettings(updatedSettings);
+            await setDoc(settingsDoc, { ...updatedSettings, uid: user.uid }, { merge: true });
+            await setDoc(userDocRef, { friendCode: newCode }, { merge: true });
+          } else {
+            setSalarySettings(data);
+            await setDoc(userDocRef, { friendCode: data.friendCode }, { merge: true });
+          }
         } else {
-          setSalarySettings(data);
-          await setDoc(userDocRef, { friendCode: data.friendCode }, { merge: true });
+          const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const defaultSettings = {
+            userName: user.displayName || 'Me',
+            avatarUrl: user.photoURL || '',
+            monthlyWage: 0, 
+            workingDaysPerMonth: 26, 
+            baseWage: 0,
+            shiftSettings: {
+              morningStart: '09:00',
+              morningEnd: '13:30',
+              afternoonStart: '16:00',
+              afternoonEnd: '22:30'
+            },
+            friendCode: newCode,
+            uid: user.uid,
+            accountLevel: 1
+          };
+          await setDoc(settingsDoc, defaultSettings);
+          await setDoc(userDocRef, { friendCode: newCode }, { merge: true });
         }
-      } else {
-        const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const defaultSettings = {
-          userName: user.displayName || 'Me',
-          avatarUrl: user.photoURL || '',
-          monthlyWage: 0, 
-          workingDaysPerMonth: 26, 
-          baseWage: 0,
-          shiftSettings: {
-            morningStart: '09:00',
-            morningEnd: '13:30',
-            afternoonStart: '16:00',
-            afternoonEnd: '22:30'
-          },
-          friendCode: newCode,
-          uid: user.uid,
-          accountLevel: 1
-        };
-        await setDoc(settingsDoc, defaultSettings);
-        await setDoc(userDocRef, { friendCode: newCode }, { merge: true });
-      }
-    });
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}/settings/salary`);
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/settings/salary`);
+    }
     return () => unsubscribe();
   }, [user]);
 
@@ -599,12 +629,19 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, `users/${user.uid}/devices`));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const devices: DeviceHistory[] = [];
-      snapshot.forEach((doc) => devices.push({ id: doc.id, ...doc.data() } as DeviceHistory));
-      devices.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setDeviceHistory(devices);
-    });
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const devices: DeviceHistory[] = [];
+        snapshot.forEach((doc) => devices.push({ id: doc.id, ...doc.data() } as DeviceHistory));
+        devices.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setDeviceHistory(devices);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/devices`);
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/devices`);
+    }
     return () => unsubscribe();
   }, [user]);
 
@@ -619,7 +656,7 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
         uid: user.uid
       });
     } catch (error) {
-      console.error("Error adding log", error);
+      handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/logs`);
     }
   }, [user]);
 
@@ -796,8 +833,10 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     toggleDarkMode: () => setDarkMode(!darkMode),
     themeColor,
     setThemeColor,
-    theme
-  }), [user, records, userRole, isLoaded, darkMode, salarySettings, deviceHistory, totalHours, history, hasMore, isLoadingHistory, loadMoreHistory, fetchMonthData, fetchYearData, themeColor, setThemeColor, theme]);
+    theme,
+    journeys,
+    refreshJourneys: fetchJourneys
+  }), [user, records, userRole, isLoaded, darkMode, salarySettings, deviceHistory, totalHours, history, hasMore, isLoadingHistory, loadMoreHistory, fetchMonthData, fetchYearData, themeColor, setThemeColor, theme, journeys, fetchJourneys]);
 
   return (
     <AttendanceContext.Provider value={value}>

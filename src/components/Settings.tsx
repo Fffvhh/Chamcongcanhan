@@ -9,7 +9,7 @@ import html2canvas from 'html2canvas';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, getDocFromCache, collection, query, where, getDocs, getDocsFromCache } from 'firebase/firestore';
 import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { CloudStorage } from './CloudStorage';
@@ -41,7 +41,20 @@ export function Settings() {
     const fetchStats = async () => {
       try {
         // Fetch total visits
-        const visitsDoc = await getDoc(doc(db, 'stats', 'visits'));
+        let visitsDoc;
+        try {
+          visitsDoc = await getDoc(doc(db, 'stats', 'visits'));
+        } catch (error: any) {
+          if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+            try {
+              visitsDoc = await getDocFromCache(doc(db, 'stats', 'visits'));
+            } catch (cacheError) {
+              visitsDoc = { exists: () => false } as any;
+            }
+          } else {
+            throw error;
+          }
+        }
         if (visitsDoc.exists()) {
           setTotalVisits(visitsDoc.data().count || 0);
         }
@@ -56,7 +69,20 @@ export function Settings() {
         if (user && isAdmin) {
           const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
           const q = query(collection(db, 'users'), where('lastActive', '>=', fiveMinsAgo));
-          const snapshot = await getDocs(q);
+          let snapshot;
+          try {
+            snapshot = await getDocs(q);
+          } catch (error: any) {
+            if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+              try {
+                snapshot = await getDocsFromCache(q);
+              } catch (cacheError) {
+                snapshot = { size: 0 } as any;
+              }
+            } else {
+              throw error;
+            }
+          }
           setOnlineUsers(snapshot.size);
         } else if (user) {
           // For normal users, we could show a static number or just 1 (themselves)

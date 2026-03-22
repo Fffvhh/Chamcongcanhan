@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
-  getDocs,
+  onSnapshot,
   query, 
   where, 
   doc, 
@@ -46,14 +46,22 @@ export function useMemories() {
       orderBy('date', 'desc')
     );
 
-    getDocs(q).then((snapshot) => {
-      const data = snapshot.docs.map(doc => doc.data() as Memory);
-      setMemories(data);
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => doc.data() as Memory);
+        setMemories(data);
+        setIsLoaded(true);
+      }, (error) => {
+        setIsLoaded(true);
+        handleFirestoreError(error, OperationType.GET, path);
+      });
+    } catch (error) {
       setIsLoaded(true);
-    }).catch((error) => {
       handleFirestoreError(error, OperationType.GET, path);
-      setIsLoaded(true);
-    });
+    }
+    
+    return () => unsubscribe();
   }, [user]);
 
   const addMemory = async (memory: Omit<Memory, 'id' | 'createdAt'>) => {

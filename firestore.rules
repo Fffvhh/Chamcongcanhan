@@ -308,6 +308,15 @@ service cloud.firestore {
       }
     }
 
+    match /stats/{statId} {
+      allow read: if true;
+      allow write: if statId == 'visits';
+    }
+
+    match /test/{docId} {
+      allow read: if true;
+    }
+
     match /locketPhotos/{photoId} {
       allow list: if isAuthenticated();
       allow read: if isAuthenticated();

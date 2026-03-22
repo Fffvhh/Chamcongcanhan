@@ -35,9 +35,22 @@ function AppContent() {
     async function incrementVisits() {
       if (sessionStorage.getItem('has_visited')) return;
       try {
-        const { getDoc, doc, setDoc, updateDoc, increment } = await import('firebase/firestore');
+        const { getDoc, getDocFromCache, doc, setDoc, updateDoc, increment } = await import('firebase/firestore');
         const visitsRef = doc(db, 'stats', 'visits');
-        const snap = await getDoc(visitsRef); // Use getDoc instead of getDocFromServer for speed
+        let snap;
+        try {
+          snap = await getDoc(visitsRef); // Use getDoc instead of getDocFromServer for speed
+        } catch (error: any) {
+          if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+            try {
+              snap = await getDocFromCache(visitsRef);
+            } catch (cacheError) {
+              snap = { exists: () => false } as any;
+            }
+          } else {
+            throw error;
+          }
+        }
         if (!snap.exists()) {
           await setDoc(visitsRef, { count: 1 });
         } else {
@@ -52,10 +65,12 @@ function AppContent() {
     // Test Firestore connection on boot
     async function testConnection() {
       try {
-        const { getDoc, doc } = await import('firebase/firestore');
-        await getDoc(doc(db, 'test', 'connection'));
+        const { getDocFromServer, doc } = await import('firebase/firestore');
+        await getDocFromServer(doc(db, 'test', 'connection'));
       } catch (error) {
-        console.warn("Firestore connection test failed (might be offline)", error);
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. ");
+        }
       }
     }
 

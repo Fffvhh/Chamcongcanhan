@@ -5,7 +5,8 @@ import { useAttendance } from '../hooks/useAttendance';
 import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { cn } from '../lib/utils';
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDocsFromCache, limit, orderBy } from 'firebase/firestore';
+import { Loading } from './Loading';
 import { getLevel } from '../constants/levels';
 
 interface LeaderboardUser {
@@ -35,7 +36,20 @@ export function Leaderboard() {
         limit(10)
       );
       
-      const snapshot = await getDocs(q);
+      let snapshot;
+      try {
+        snapshot = await getDocs(q);
+      } catch (error: any) {
+        if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+          try {
+            snapshot = await getDocsFromCache(q);
+          } catch (cacheError) {
+            snapshot = { empty: true, forEach: () => {}, docs: [] } as any;
+          }
+        } else {
+          throw error;
+        }
+      }
       const users: LeaderboardUser[] = [];
       
       // We need to fetch total hours for each user from their attendance subcollection
@@ -153,10 +167,7 @@ export function Leaderboard() {
 
         <div className="divide-y divide-slate-50">
           {isLoading ? (
-            <div className="p-12 text-center space-y-4">
-              <div className={cn("animate-spin w-8 h-8 border-4 border-t-transparent rounded-full mx-auto", theme.accent.replace('text-', 'border-'))} />
-              <p className="text-sm text-slate-400 font-medium">Đang tải bảng xếp hạng...</p>
-            </div>
+            <Loading message="Đang tải bảng xếp hạng..." />
           ) : friends.map((f, index) => {
             const { current } = getLevel(f.totalHours);
             return (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, getDocs, query, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, where } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromCache, query, orderBy, limit, doc, getDoc, getDocFromCache, onSnapshot, updateDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { useAttendance } from '../contexts/AttendanceContext';
@@ -9,6 +9,7 @@ import { format, differenceInMinutes, parseISO, subMonths, addMonths } from 'dat
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 import { cn } from '../utils/cn';
 
+import { Loading } from './Loading';
 import { useToast } from './Toast';
 
 interface UserProfile {
@@ -148,9 +149,17 @@ export function AdminDashboard() {
             let deviceSnap;
             try {
               deviceSnap = await getDocs(deviceQ);
-            } catch (error) {
-              handleFirestoreError(error, OperationType.LIST, `users/${user.id}/devices`);
-              throw error;
+            } catch (error: any) {
+              if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+                try {
+                  deviceSnap = await getDocsFromCache(deviceQ);
+                } catch (cacheError) {
+                  deviceSnap = { empty: true, docs: [] } as any;
+                }
+              } else {
+                handleFirestoreError(error, OperationType.LIST, `users/${user.id}/devices`);
+                throw error;
+              }
             }
             let lastActive = 'N/A';
             if (!deviceSnap.empty) {
@@ -168,8 +177,26 @@ export function AdminDashboard() {
             let settingsSnap;
             try {
               [attendanceSnap, settingsSnap] = await Promise.all([
-                getDocs(attendanceQ),
-                getDoc(doc(db, `users/${user.id}/settings/salary`))
+                getDocs(attendanceQ).catch(async (error: any) => {
+                  if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+                    try {
+                      return await getDocsFromCache(attendanceQ);
+                    } catch (cacheError) {
+                      return { empty: true, forEach: () => {}, docs: [] } as any;
+                    }
+                  }
+                  throw error;
+                }),
+                getDoc(doc(db, `users/${user.id}/settings/salary`)).catch(async (error: any) => {
+                  if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+                    try {
+                      return await getDocFromCache(doc(db, `users/${user.id}/settings/salary`));
+                    } catch (cacheError) {
+                      return { exists: () => false } as any;
+                    }
+                  }
+                  throw error;
+                })
               ]);
             } catch (error) {
               handleFirestoreError(error, OperationType.GET, `users/${user.id}/attendance_or_settings`);
@@ -404,7 +431,7 @@ export function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
-        <div className={cn("animate-spin rounded-full h-12 w-12 border-b-2", theme.accent.replace('text-', 'border-'))}></div>
+        <Loading message="Đang tải bảng điều khiển..." />
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, getDocs, getDocsFromCache, query, orderBy } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 
@@ -22,8 +22,20 @@ export const getJourneys = async (): Promise<Journey[]> => {
       collection(db, `users/${auth.currentUser.uid}/journeys`),
       orderBy('date', 'desc')
     );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as Journey);
+    try {
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => doc.data() as Journey);
+    } catch (error: any) {
+      if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+        try {
+          const cachedSnapshot = await getDocsFromCache(q);
+          return cachedSnapshot.docs.map(doc => doc.data() as Journey);
+        } catch (cacheError) {
+          return [];
+        }
+      }
+      throw error;
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}/journeys`);
     return [];

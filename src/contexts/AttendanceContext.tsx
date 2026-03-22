@@ -14,6 +14,8 @@ import {
   limit, 
   startAfter, 
   getDocs,
+  getDocsFromCache,
+  getDocFromCache,
   QueryDocumentSnapshot,
   DocumentData
 } from 'firebase/firestore';
@@ -318,9 +320,9 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       setJourneysLoadFailed(false);
       setIsJourneysLoaded(true);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/journeys`);
       setJourneysLoadFailed(true);
       setIsJourneysLoaded(true);
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/journeys`);
     }
   }, [user, isJourneysLoaded, journeysLoadFailed]);
 
@@ -434,7 +436,20 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
         setUser(currentUser);
         try {
           const userDocRef = doc(db, `users/${currentUser.uid}`);
-          const userSnap = await getDoc(userDocRef);
+          let userSnap;
+          try {
+            userSnap = await getDoc(userDocRef);
+          } catch (error: any) {
+            if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+              try {
+                userSnap = await getDocFromCache(userDocRef);
+              } catch (cacheError) {
+                userSnap = { exists: () => false } as any;
+              }
+            } else {
+              throw error;
+            }
+          }
           
           if (userSnap.exists()) {
             const data = userSnap.data();
@@ -512,17 +527,24 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       where('date', '>=', dateStr),
       orderBy('date', 'desc')
     );
-    getDocs(q).then((snapshot) => {
-      const updatedRecords: Record<string, AttendanceRecord> = {};
-      snapshot.forEach((doc) => {
-        updatedRecords[doc.id] = doc.data() as AttendanceRecord;
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const updatedRecords: Record<string, AttendanceRecord> = {};
+        snapshot.forEach((doc) => {
+          updatedRecords[doc.id] = doc.data() as AttendanceRecord;
+        });
+        setRecords(updatedRecords);
+        setIsLoaded(true);
+      }, (error) => {
+        setIsLoaded(true);
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}/attendance`);
       });
-      setRecords(updatedRecords);
+    } catch (error) {
       setIsLoaded(true);
-    }).catch((error) => {
       handleFirestoreError(error, OperationType.GET, `users/${user.uid}/attendance`);
-      setIsLoaded(true);
-    });
+    }
+    return () => unsubscribe();
   }, [user]);
 
   // Calculate total hours
@@ -553,7 +575,20 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       const attendanceRef = collection(db, `users/${user.uid}/attendance`);
       let q = query(attendanceRef, orderBy('date', 'desc'), limit(20));
       if (lastVisible) q = query(q, startAfter(lastVisible));
-      const snapshot = await getDocs(q);
+      let snapshot;
+      try {
+        snapshot = await getDocs(q);
+      } catch (error: any) {
+        if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+          try {
+            snapshot = await getDocsFromCache(q);
+          } catch (cacheError) {
+            snapshot = { empty: true, forEach: () => {}, docs: [] } as any;
+          }
+        } else {
+          throw error;
+        }
+      }
       if (snapshot.empty) {
         setHasMore(false);
       } else {
@@ -564,8 +599,8 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
         if (snapshot.docs.length < 20) setHasMore(false);
       }
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/attendance`);
       setHistoryLoadFailed(true);
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/attendance`);
     } finally {
       setIsLoadingHistory(false);
     }
@@ -665,7 +700,20 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     const start = format(startOfMonth(monthDate), 'yyyy-MM-dd');
     const end = format(endOfMonth(monthDate), 'yyyy-MM-dd');
     const q = query(collection(db, `users/${user.uid}/attendance`), where('date', '>=', start), where('date', '<=', end));
-    const snapshot = await getDocs(q);
+    let snapshot;
+    try {
+      snapshot = await getDocs(q);
+    } catch (error: any) {
+      if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+        try {
+          snapshot = await getDocsFromCache(q);
+        } catch (cacheError) {
+          snapshot = { empty: true, forEach: () => {}, docs: [] } as any;
+        }
+      } else {
+        throw error;
+      }
+    }
     const newRecords: Record<string, AttendanceRecord> = {};
     snapshot.forEach(doc => { newRecords[doc.id] = doc.data() as AttendanceRecord; });
     setRecords(prev => ({ ...prev, ...newRecords }));
@@ -675,7 +723,20 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     if (!user) return;
     const start = `${year}-01-01`, end = `${year}-12-31`;
     const q = query(collection(db, `users/${user.uid}/attendance`), where('date', '>=', start), where('date', '<=', end));
-    const snapshot = await getDocs(q);
+    let snapshot;
+    try {
+      snapshot = await getDocs(q);
+    } catch (error: any) {
+      if (error.message?.includes('Quota limit exceeded') || error.message?.includes('resource-exhausted') || error.message?.includes('the client is offline') || error.message?.includes('Failed to get document')) {
+        try {
+          snapshot = await getDocsFromCache(q);
+        } catch (cacheError) {
+          snapshot = { empty: true, forEach: () => {}, docs: [] } as any;
+        }
+      } else {
+        throw error;
+      }
+    }
     const newRecords: Record<string, AttendanceRecord> = {};
     snapshot.forEach(doc => { newRecords[doc.id] = doc.data() as AttendanceRecord; });
     setRecords(prev => ({ ...prev, ...newRecords }));

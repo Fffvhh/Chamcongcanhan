@@ -12,11 +12,10 @@ import { Statistics } from './components/Statistics';
 import { Settings } from './components/Settings';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SplashScreen } from './components/SplashScreen';
-import { LoginScreen } from './components/LoginScreen';
+// ĐÃ XÓA LoginScreen
 import { ErrorBoundary } from './ErrorBoundary';
 import { AttendanceProvider } from './contexts/AttendanceContext';
 import { db } from './firebase';
-import { doc, getDocFromServer, setDoc, increment, updateDoc } from 'firebase/firestore';
 import { useAttendance } from './hooks/useAttendance';
 import { UpdateNotification } from './components/UpdateNotification';
 import { Memories } from './components/Memories';
@@ -24,23 +23,20 @@ import { Journey } from './components/Journey';
 import { cn } from './utils/cn';
 
 function AppContent() {
-  const { userRole, user, salarySettings, isLoaded, theme, themeColor } = useAttendance();
+  // Loại bỏ các biến liên quan đến user nếu không cần thiết, 
+  // nhưng giữ lại để tránh lỗi tham chiếu trong các component con
+  const { userRole, salarySettings, isLoaded, themeColor } = useAttendance();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showSplash, setShowSplash] = useState(true);
 
+  // Logic đếm lượt truy cập và kiểm tra kết nối Firestore (Giữ nguyên)
   useEffect(() => {
-    console.log("AppContent: isLoaded changed to", isLoaded);
-  }, [isLoaded]);
-
-  // Initialization logic
-  useEffect(() => {
-    // Increment global visits counter
     async function incrementVisits() {
       if (sessionStorage.getItem('has_visited')) return;
       try {
         const { getDoc, doc, setDoc, updateDoc, increment } = await import('firebase/firestore');
         const visitsRef = doc(db, 'stats', 'visits');
-        const snap = await getDoc(visitsRef); // Use getDoc instead of getDocFromServer for speed
+        const snap = await getDoc(visitsRef);
         if (!snap.exists()) {
           await setDoc(visitsRef, { count: 1 });
         } else {
@@ -52,13 +48,12 @@ function AppContent() {
       }
     }
 
-    // Test Firestore connection on boot
     async function testConnection() {
       try {
         const { getDoc, doc } = await import('firebase/firestore');
         await getDoc(doc(db, 'test', 'connection'));
       } catch (error) {
-        console.warn("Firestore connection test failed (might be offline)", error);
+        console.warn("Firestore connection test failed", error);
       }
     }
 
@@ -66,19 +61,20 @@ function AppContent() {
     incrementVisits();
   }, []);
 
+  // Điều hướng mặc định: Luôn vào Dashboard hoặc Admin nếu có quyền
   useEffect(() => {
     if (userRole === 'admin') {
       if (activeTab !== 'admin' && activeTab !== 'settings') setActiveTab('admin');
     } else {
-      if (activeTab !== 'dashboard' && activeTab !== 'history' && activeTab !== 'settings' && activeTab !== 'calendar' && activeTab !== 'statistics' && activeTab !== 'leaderboard' && activeTab !== 'memories' && activeTab !== 'journey') {
+      const validTabs = ['dashboard', 'calendar', 'statistics', 'memories', 'journey', 'settings'];
+      if (!validTabs.includes(activeTab)) {
         setActiveTab('dashboard');
       }
     }
   }, [userRole]);
 
-  if (!user && isLoaded) {
-    return <LoginScreen />;
-  }
+  // ĐÃ XÓA ĐOẠN CODE: if (!user && isLoaded) { return <LoginScreen />; }
+  // Bây giờ ứng dụng sẽ luôn chạy xuống phần return giao diện chính bên dưới
 
   return (
     <>
@@ -95,7 +91,8 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
-      {salarySettings.notificationEnabled && <UpdateNotification />}
+      
+      {salarySettings?.notificationEnabled && <UpdateNotification />}
 
       <div 
         className={cn(
@@ -125,16 +122,13 @@ function AppContent() {
             {activeTab === 'admin' && userRole === 'admin' && <AdminDashboard />}
           </div>
 
-          {/* Footer Section */}
-          <footer className="mt-auto py-4 px-4 flex flex-col items-center justify-center text-center border-t border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm transition-colors duration-300">
+          <footer className="mt-auto py-4 px-4 flex flex-col items-center justify-center text-center border-t border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
             <p className="text-slate-500 dark:text-slate-400 font-medium text-sm italic">
               "Mong con đường sắp tới bạn đi sẽ bằng phẳng hơn nếu có gồ ghề vẫn mong bạn đủ sức vượt qua"
             </p>
             <p className="mt-1 text-slate-400 dark:text-slate-500 text-[8px] font-medium tracking-widest uppercase">
               Phát triển bởi Trần Văn Thắng
             </p>
-            
-            {/* Bottom spacing for mobile nav */}
             <div className="h-10 md:h-2" />
           </footer>
         </main>
@@ -156,5 +150,3 @@ export default function App() {
     </ErrorBoundary>
   );
 }
-
-

@@ -211,6 +211,15 @@ service cloud.firestore {
         (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000000));
     }
 
+    function isValidSavings(data) {
+      return hasRequiredFields(['targetAmount', 'currentAmount', 'transactions', 'updatedAt', 'uid']) &&
+        data.targetAmount is number && data.targetAmount >= 0 &&
+        data.currentAmount is number && data.currentAmount >= 0 &&
+        data.transactions is list && data.transactions.size() < 1000 &&
+        data.updatedAt is string && data.updatedAt.size() < 100 &&
+        data.uid == request.auth.uid;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -297,6 +306,13 @@ service cloud.firestore {
         allow list: if isOwner(userId) || isAdmin();
         allow read: if isOwner(userId) || isAdmin();
         allow create, update: if isOwner(userId) && isValidSavingsGoal(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /savings/{year} {
+        allow list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidSavings(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
 

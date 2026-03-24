@@ -1,0 +1,16 @@
+[
+  {
+    "version": "1.1.1",
+    "changes": [
+      "Sửa lỗi không thể cập nhật phiên bản trên một số thiết bị.",
+      "Cải thiện cơ chế kiểm tra và tải lại ứng dụng khi có bản mới."
+    ]
+  },
+  {
+    "version": "1.1.0",
+    "changes": [
+      "Thêm hệ thống Chuỗi ngày (Streak System) vào trang Tổng quan.",
+      "Cải thiện giao diện thông báo cập nhật."
+    ]
+  }
+]

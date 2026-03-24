@@ -10,14 +10,30 @@ export default defineConfig(({mode}) => {
     base: '/',
     plugins: [react(), tailwindcss(), VitePWA({
         registerType: 'prompt',
+        injectRegister: 'auto',
         workbox: {
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          cleanupOutdatedCaches: true,
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          clientsClaim: true,
+          skipWaiting: true
         },
         manifest: {
           name: 'TimeTracker',
           short_name: 'TimeTracker',
           description: 'Ứng dụng chấm công cá nhân',
           theme_color: '#ffffff',
+          background_color: '#ffffff',
+          display: 'standalone',
+          scope: '/',
+          start_url: '/',
+          icons: [
+            {
+              src: 'https://cdn-icons-png.flaticon.com/512/2838/2838779.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable'
+            }
+          ]
         }
       })],
     define: {
